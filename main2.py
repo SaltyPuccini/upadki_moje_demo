@@ -277,71 +277,60 @@ def checkFall(threshold, period):
     time.sleep(10)
     while True:
 
-        yNose = keypoints_with_scores[0][0][0][0]
-        yFeet = (keypoints_with_scores[0][0][14][0] + keypoints_with_scores[0][0][13][0]) / 2
+        if torso_visible(keypoints_with_scores):
 
-        yDiff = yFeet - yNose
+            yNose = keypoints_with_scores[0][0][0][0]
+            yKnees = (keypoints_with_scores[0][0][14][0] + keypoints_with_scores[0][0][13][0]) / 2
 
-        time.sleep(period)
+            yDiff = yKnees - yNose
 
-        yNose = keypoints_with_scores[0][0][0][0]
-        yFeet = (keypoints_with_scores[0][0][14][0] + keypoints_with_scores[0][0][13][0]) / 2
+            time.sleep(period)
 
-        yDiff2 = yFeet - yNose
-        if yDiff2 < threshold * yDiff:
-            print("Fall detected "+ str(fall))
-            fall=fall+1
-            #print(yDiff-yDiff2)
+            yNose = keypoints_with_scores[0][0][0][0]
+            yKnees = (keypoints_with_scores[0][0][14][0] + keypoints_with_scores[0][0][13][0]) / 2
+
+            yDiff2 = yKnees - yNose
+
+            if yDiff2 < threshold * yDiff and liniaMalkowskiego():
+                print("Fall detected " + str(fall))
+                fall = fall + 1
 
 
-def checkFall2(threshold, period):
-    time.sleep(10)
-    while True:
-        flags = [False, False, False]
-        legs = [[0, 0], [0, 0], [0, 0]]
-        # 1st heuristic
-        yNose = keypoints_with_scores[0][0][0][0]
-        yFeet = (keypoints_with_scores[0][0][16][0] + keypoints_with_scores[0][0][15][0]) / 2
-        yDiff = yFeet - yNose
-        print(yDiff)
+def liniaMalkowskiego():
+    legs = [[0, 0], [0, 0], [0, 0]]
 
-        time.sleep(period)
+    # usrednione kostki
+    legs[0][0] = (keypoints_with_scores[0][0][16][1] + keypoints_with_scores[0][0][15][1]) / 2
+    legs[0][1] = (keypoints_with_scores[0][0][16][0] + keypoints_with_scores[0][0][15][0]) / 2
 
-        yNose = keypoints_with_scores[0][0][0][0]
-        yFeet = (keypoints_with_scores[0][0][16][0] + keypoints_with_scores[0][0][15][0]) / 2
-        yDiff2 = yFeet - yNose
-        print(yDiff2)
+    # usrednione kolana
+    legs[1][0] = (keypoints_with_scores[0][0][13][1] + keypoints_with_scores[0][0][14][1]) / 2
+    legs[1][1] = (keypoints_with_scores[0][0][13][0] + keypoints_with_scores[0][0][14][0]) / 2
 
-        if yDiff2 < threshold * yDiff:
-            flags[0] = True
-            print("Fall detected")
+    # usrednione biodra
+    legs[2][0] = (keypoints_with_scores[0][0][11][1] + keypoints_with_scores[0][0][12][1]) / 2
+    legs[2][1] = (keypoints_with_scores[0][0][11][0] + keypoints_with_scores[0][0][12][0]) / 2
 
-        legs[0][0] = (keypoints_with_scores[0][0][16][1] + keypoints_with_scores[0][0][15][1]) / 2
-        legs[0][1] = (keypoints_with_scores[0][0][16][0] + keypoints_with_scores[0][0][15][0]) / 2
+    lineA = ((legs[0][1] + legs[1][1]) / (legs[0][0] - legs[1][0]))
+    lineB = legs[0][1] - lineA * legs[0][0]
 
-        legs[1][0] = (keypoints_with_scores[0][0][13][1] + keypoints_with_scores[0][0][14][1]) / 2
-        legs[1][1] = (keypoints_with_scores[0][0][13][0] + keypoints_with_scores[0][0][14][0]) / 2
+    d = abs(lineA * legs[2][0] + -1 * legs[2][1] + lineB) / (math.sqrt(lineA ** 2 + lineB ** 2))  # what the fuck?
+    # i = 0x5f3759df - (i >> 1)
+    c = math.sqrt((legs[2][0] - legs[0][0]) ** 2 + (legs[2][1] - legs[0][1]) ** 2)
 
-        legs[1][0] = (keypoints_with_scores[0][0][11][1] + keypoints_with_scores[0][0][12][1]) / 2
-        legs[1][1] = (keypoints_with_scores[0][0][11][0] + keypoints_with_scores[0][0][12][0]) / 2
+    sinA = d / c
 
-        lineA = ((legs[0][1] + legs[1][1]) / (legs[0][0] - legs[1][0]))
-        lineB = legs[0][1] - ((legs[0][1] + legs[1][1]) / (legs[0][0] - legs[1][0])) * legs[0][0]
+    alpha = np.arcsin(sinA)
+    # print("alpha: ", alpha)
 
-        d = abs(lineA * legs[2][0] + -1 * legs[2][1] + lineB) / (math.sqrt(lineA ** 2 + lineB ** 2))
-        c = math.sqrt((legs[2][0] - legs[0][0]) ** 2 + (legs[2][1] - legs[0][1]) ** 2)
+    if np.pi / 6 < alpha:
+        return True
+    return False
 
-        sinA = d / c
-
-        alpha = np.arcsin(sinA)
-        print("alpha: ", alpha)
-
-        if alpha > np.pi / 3:
-            flags[1] = True
 
 def main():
-    #cap = cv2.VideoCapture("fall.mp4")
-    cap = cv2.VideoCapture(1)
+    # cap = cv2.VideoCapture("fall.mp4")
+    cap = cv2.VideoCapture(2)
     if cap.isOpened() == False:
         print("Error opening video stream or file")
 
@@ -355,8 +344,8 @@ def main():
         if ret == True:
             global keypoints_with_scores
             keypoints_with_scores = run_inference(movenet, frame, crop_region, crop_size=[input_size, input_size])
-            draw_connections(frame, keypoints_with_scores, KEYPOINT_EDGE_INDS_TO_COLOR, 0.4)
-            draw_keypoints(frame, keypoints_with_scores, 0.4)
+            draw_connections(frame, keypoints_with_scores, KEYPOINT_EDGE_INDS_TO_COLOR, 0.3)
+            draw_keypoints(frame, keypoints_with_scores, 0.3)
             crop_region = determine_crop_region(keypoints_with_scores, frame_height, frame_width)
             cv2.imshow("Pose Estimation", frame)
 
